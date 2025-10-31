@@ -1,0 +1,4 @@
+Zaman,Başlangıç,Bitiş,Mesafe (m),Gerçek Süre (sn),Serbest Süre (sn),Gecikme Oranı,Tahmin Süre (sn),Tahmin Sınıfı,Gerçek Sınıf,MAE (sn)
+2025-10-31 18:35:58,"Şelale Park, Gaziantep","Defa Life Hastanesi , Gaziantep ",49609,2322,2208,1.052,-1732.85,Orta,Düşük,80983.89
+2025-10-31 18:36:11,"Şelale Park, Gaziantep","Defa Life Hastanesi , Gaziantep ",49609,2322,2208,1.052,-1732.85,Orta,Düşük,68162.38
+2025-10-31 18:36:34,"Şelale Park, Gaziantep",Özel Kemal Bayındır Hastanesi ,1240834,38563,38048,1.014,6023.27,Düşük,Düşük,63073.43

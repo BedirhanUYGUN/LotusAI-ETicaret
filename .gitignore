@@ -1,0 +1,10 @@
+/.idea
+.env
+
+activity_classifier.pkl
+
+main.py
+main2.py
+
+model.ipynb
+spending_data.csv
