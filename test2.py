@@ -98,7 +98,7 @@ def build_features(now, route_info):
         "hour": now.hour,
         "dow": now.weekday()
     }
-
+# Sınıflandırma için etiket
 def label_from_delay_ratio(r):
     if r < 1.15:
         return "Düşük"
@@ -171,6 +171,9 @@ reg_model, clf_model, reg_path, clf_path = load_or_init_models()
 # Main Logic
 # ----------------------------
 def run_once():
+    from river import tree  # gelişmiş sınıflandırıcı için
+    import altair as alt
+
     google_key, tomtom_key = get_api_keys()
     if not google_key or not tomtom_key:
         st.error("Google ve TomTom API anahtarları gerekli.")
@@ -191,53 +194,58 @@ def run_once():
         return
 
     now = datetime.now()
-    x = build_features(now, route_info)
+    # 🔧 Genişletilmiş özellik seti
+    x = {
+        "length_km": (route_info["length_m"] or 0) / 1000.0,
+        "freeflow_min": (route_info["freeflow_time_s"] or 0) / 60.0,
+        "hour": now.hour,
+        "dow": now.weekday(),
+        "delay_ratio": (route_info["travel_time_s"] or 1) / max(1, route_info["freeflow_time_s"] or 1)
+    }
+
     y_time = route_info["travel_time_s"] or 0.0
     y_ff = route_info["freeflow_time_s"] or max(1.0, y_time)
     delay_ratio = y_time / y_ff if y_ff > 0 else 1.0
     y_class = label_from_delay_ratio(delay_ratio)
 
-    y_pred_time = reg_model.predict_one(x) or 0.0
+    # 🔮 Tahmin - negatif değerleri bastır
+    y_pred_time = max(0.0, reg_model.predict_one(x) or 0.0)
     y_pred_class = clf_model.predict_one(x) or "Düşük"
 
+    # 🔢 MAE güncelle
     metric = st.session_state["reg_metric"]
     metric.update(y_time, y_pred_time)
 
-    reg_model.learn_one(x, y_time)
-    clf_model.learn_one(x, y_class)
+    # 🧠 Öğrenmeyi pencerede (mini-batch benzeri) stabilize et
+    if "recent_data" not in st.session_state:
+        st.session_state["recent_data"] = []
+    st.session_state["recent_data"].append((x, y_time, y_class))
+    if len(st.session_state["recent_data"]) > 10:
+        st.session_state["recent_data"].pop(0)
+
+    for xi, yi, yc in st.session_state["recent_data"]:
+        reg_model.learn_one(xi, yi)
+        clf_model.learn_one(xi, yc)
+
     save_models(reg_model, clf_model, reg_path, clf_path)
 
-    hist_df = pd.DataFrame(st.session_state["history"][-20:])
-    hist_df = hist_df.rename(columns={
-        "timestamp": "Zaman Damgası",
-        "start": "Başlangıç Adresi",
-        "end": "Bitiş Adresi",
-        "length_m": "Mesafe (m)",
-        "travel_time_s_obs": "Gözlenen Süre (sn)",
-        "freeflow_time_s_obs": "Serbest Akış Süresi (sn)",
-        "delay_ratio_obs": "Gecikme Oranı",
-        "reg_pred_time_s": "Tahmin Edilen Süre (sn)",
-        "clf_pred_class": "Tahmin Edilen Sınıf",
-        "mae_seconds": "Ortalama Hata (sn)"
-    })
-    st.dataframe(hist_df, use_container_width=True)
-
+    # 📜 Kayıt tut
     row = {
-        "Zaman Başlangıcı": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "Başlangıç": start_addr,
-        "Bitiş": end_addr,
+        "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "start": start_addr,
+        "end": end_addr,
         "length_m": route_info["length_m"],
         "travel_time_s_obs": y_time,
         "freeflow_time_s_obs": y_ff,
         "delay_ratio_obs": delay_ratio,
-        "reg_pred_time_s": float(y_pred_time or 0.0),
+        "reg_pred_time_s": float(y_pred_time),
         "clf_pred_class": y_pred_class,
         "mae_seconds": metric.get()
     }
     append_history(row)
-
     st.success("✅ Veri çekildi, tahmin yapıldı ve model güncellendi.")
 
+    # 📊 KPI’lar
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     with kpi1:
         st.metric("Mesafe (km)", f"{(route_info['length_m'] or 0)/1000:.2f}")
@@ -248,6 +256,7 @@ def run_once():
     with kpi4:
         st.metric("Gecikme Oranı", f"{delay_ratio:.2f}")
 
+    # 🔍 Tahmin karşılaştırması
     st.write("---")
     c1, c2 = st.columns(2)
     with c1:
@@ -260,10 +269,32 @@ def run_once():
         st.write(f"🔮 Tahmin edilen: **{y_pred_class}**")
         st.write(f"🎯 Gerçek sınıf: **{y_class}**")
 
-    st.write("---")
-    st.subheader("📊 Geçmiş (Son 20)")
+    # 📈 Grafik: Son 20 tahmin ve gözlem
+    # st.write("---")
+    # st.subheader("📊 Geçmiş Tahmin Performansı (Son 20)")
     hist_df = pd.DataFrame(st.session_state["history"][-20:])
-    st.dataframe(hist_df, width='stretch')
+    # if not hist_df.empty:
+    #     chart = (
+    #         alt.Chart(hist_df)
+    #         .mark_line(point=True)
+    #         .encode(
+    #             x="timestamp:T",
+    #             y="travel_time_s_obs:Q",
+    #             color=alt.value("red"),
+    #             tooltip=["timestamp", "travel_time_s_obs"]
+    #         )
+    #         + alt.Chart(hist_df)
+    #         .mark_line(point=True)
+    #         .encode(
+    #             x="timestamp:T",
+    #             y="reg_pred_time_s:Q",
+    #             color=alt.value("blue"),
+    #             tooltip=["timestamp", "reg_pred_time_s"]
+    #         )
+    #     )
+    #    st.altair_chart(chart, use_container_width=True)
+    st.dataframe(hist_df, use_container_width=True)
+
 
 # ----------------------------
 # Güncelle Butonu
