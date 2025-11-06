@@ -1,0 +1,65 @@
+# Gerçek Zamanlı Trafik Tahmin Uygulaması
+
+Bu proje, **test2.py** dosyasında geliştirilen Streamlit tabanlı bir web uygulaması ile iki adres arasındaki gerçek zamanlı trafik durumunu tahmin eder. Uygulama; Google Maps Geocoding API'ı ile adresleri koordinatlara dönüştürür ve TomTom Routing API'ı ile trafik etkili rota bilgilerini elde ederek makine öğrenmesi modelleriyle seyahat süresi ve trafik yoğunluğu öngörüleri üretir.
+
+## Özellikler
+- Google ve TomTom API anahtarlarını kullanıcı arayüzünden veya `.env` dosyasından alma.
+- Haversine formülü ile iki konum arasındaki mesafeyi hesaplama ve Türkiye dışı sonuçları filtreleme.
+- TomTom Routing API ile trafik, serbest akış ve gecikme sürelerini alma.
+- River kütüphanesi ile artımlı (online) öğrenen regresyon ve sınıflandırma modelleri:
+  - `StandardScaler | LinearRegression` ile seyahat süresi tahmini.
+  - `GaussianNB` ile trafik yoğunluğunu (Düşük/Orta/Yüksek) sınıflandırma.
+- Gerçek sonuçlar geldikçe modelleri ve performans metriğini (MAE) güncelleme.
+- Her isteği `data/traffic_stream_log.csv` dosyasına kaydetme.
+- Model dosyalarını `models/traffic_reg.pkl` ve `models/traffic_clf.pkl` olarak saklama.
+- Streamlit arayüzü üzerinden KPI göstergeleri, tahmin-gözlem karşılaştırmaları ve geçmiş sorgu tablosu sunma.
+
+## Gereksinimler
+Aşağıdaki Python paketlerine ihtiyaç duyulur:
+
+- `streamlit`
+- `requests`
+- `pandas`
+- `python-dotenv`
+- `river`
+- `altair` (grafikler için, kodda hazır olup gerekirse etkinleştirilebilir)
+
+Sanallaştırılmış bir ortam kullanmanız önerilir:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows için .venv\Scripts\activate
+pip install streamlit requests pandas python-dotenv river altair
+```
+
+## Ortam Değişkenleri
+Uygulamanın çalışması için Google ve TomTom API anahtarlarına ihtiyaç vardır. Anahtarları iki şekilde sağlayabilirsiniz:
+
+1. Uygulamayı çalıştırdıktan sonra Streamlit yan panelinden anahtarları girerek.
+2. Proje kök dizinine `.env` dosyası ekleyerek:
+
+```
+GOOGLE_API_KEY=google_api_anahtariniz
+TOMTOM_API_KEY=tomtom_api_anahtariniz
+```
+
+## Çalıştırma
+Streamlit uygulamasını başlatmak için proje kök dizininde aşağıdaki komutu çalıştırın:
+
+```bash
+streamlit run test2.py
+```
+
+Ardından tarayıcınızda açılan arayüzden başlangıç ve bitiş adreslerini girip **"Güncelle"** butonuna basarak gerçek zamanlı trafik tahminlerini görüntüleyebilirsiniz.
+
+## Veri ve Model Yönetimi
+- Her çalıştırmada alınan veriler `data/traffic_stream_log.csv` dosyasına eklenir ve daha sonra analiz için kullanılabilir.
+- Eğitimli modeller `models/` klasöründe saklanır. Klasör ve dosyalar otomatik olarak oluşturulur.
+- Streamlit oturumunda son 20 sorgunun geçmişi tablo olarak görüntülenir.
+- Regresyon modeli için Ortalama Mutlak Hata (MAE) metriği oturum boyunca takip edilir.
+
+## Notlar
+- Google Geocoding API sonuçları Türkiye sınırları dışındaysa uygulama hata mesajı gösterir.
+- İki konum arasındaki mesafe 1500 km'den fazlaysa TomTom isteği reddedilir.
+- Streamlit oturumu yeniden başlatıldığında modeller kaydedilen dosyalardan yüklenir, böylece kümülatif öğrenme devam eder.
+- Kodda yer alan Altair grafik bölümü yorum satırına alınmıştır; ihtiyaç halinde yorumlar kaldırılarak geçmiş performans grafikleri etkinleştirilebilir.
